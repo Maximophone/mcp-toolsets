@@ -255,10 +255,11 @@ def create_database_row(database_id: str, properties_json: str) -> str:
 @tool(
     description="Update properties of an existing row in a Notion database.",
     page_id="The page/row ID or URL to update",
+    row_name="The name/title of the row being updated (for human review purposes)",
     properties_json="JSON object with property values to update. Example: '{\"Status\": \"Done\", \"Priority\": 2}'",
     safe=False
 )
-def update_database_row(page_id: str, properties_json: str) -> str:
+def update_database_row(page_id: str, row_name: str, properties_json: str) -> str:
     """Update a row's properties."""
     client = _get_client()
     
@@ -304,33 +305,127 @@ def update_database_row(page_id: str, properties_json: str) -> str:
     # Update the page
     updated_page = client.update_page(page_id, notion_props)
     
-    return f"Row updated successfully!\nPage ID: {updated_page.get('id', 'unknown')}"
+    return f"Row '{row_name}' updated successfully!\nPage ID: {updated_page.get('id', 'unknown')}"
+
+
+@tool(
+    description="Update multiple rows in a Notion database at once. More efficient than updating rows one by one.",
+    database_id="The database ID or URL (all rows must belong to this database)",
+    rows_json="JSON array of row updates. Each item must have 'page_id', 'row_name' (for human review), and 'properties'. Example: '[{\"page_id\": \"abc123\", \"row_name\": \"Task 1\", \"properties\": {\"Status\": \"Done\"}}, {\"page_id\": \"def456\", \"row_name\": \"Task 2\", \"properties\": {\"Status\": \"In Progress\"}}]'",
+    safe=False
+)
+def update_database_rows(database_id: str, rows_json: str) -> str:
+    """Update multiple rows at once."""
+    client = _get_client()
+    
+    # Parse rows JSON
+    try:
+        rows = json.loads(rows_json)
+    except json.JSONDecodeError as e:
+        return f"Error: Invalid JSON rows: {e}"
+    
+    if not isinstance(rows, list):
+        return "Error: rows_json must be a JSON array"
+    
+    if not rows:
+        return "Error: No rows provided"
+    
+    # Get database schema to know property types
+    db = client.get_database(database_id)
+    db_props = db.get("properties", {})
+    
+    results = []
+    errors = []
+    
+    for i, row in enumerate(rows):
+        if not isinstance(row, dict):
+            errors.append(f"Row {i+1}: Must be an object")
+            continue
+        
+        page_id = row.get("page_id")
+        row_name = row.get("row_name", "(unnamed)")
+        simple_props = row.get("properties", {})
+        
+        if not page_id:
+            errors.append(f"Row {i+1} ({row_name}): Missing page_id")
+            continue
+        
+        if not simple_props:
+            errors.append(f"Row {i+1} ({row_name}): No properties to update")
+            continue
+        
+        # Convert simple values to Notion format
+        notion_props = {}
+        row_errors = []
+        
+        for prop_name, value in simple_props.items():
+            if prop_name not in db_props:
+                row_errors.append(f"Unknown property: {prop_name}")
+                continue
+            
+            prop_type = db_props[prop_name].get("type")
+            
+            try:
+                notion_props[prop_name] = NotionClient.format_property_value(prop_type, value)
+            except Exception as e:
+                row_errors.append(f"Error formatting {prop_name}: {e}")
+        
+        if row_errors:
+            errors.append(f"Row {i+1} ({row_name}): " + "; ".join(row_errors))
+            continue
+        
+        # Update the page
+        try:
+            updated_page = client.update_page(page_id, notion_props)
+            results.append(f"✓ '{row_name}' (ID: {updated_page.get('id', 'unknown')})")
+        except Exception as e:
+            errors.append(f"Row {i+1} ({row_name}): API error - {e}")
+    
+    # Build output
+    output = []
+    
+    if results:
+        output.append(f"Successfully updated {len(results)} row(s):")
+        output.extend(results)
+    
+    if errors:
+        if output:
+            output.append("")
+        output.append(f"Errors ({len(errors)}):")
+        output.extend(errors)
+    
+    if not results and not errors:
+        return "No rows were processed."
+    
+    return "\n".join(output)
 
 
 @tool(
     description="Archive (soft-delete) a row in a Notion database.",
     page_id="The page/row ID or URL to archive",
+    row_name="The name/title of the row being archived (for human review purposes)",
     safe=False
 )
-def archive_database_row(page_id: str) -> str:
+def archive_database_row(page_id: str, row_name: str) -> str:
     """Archive a row."""
     client = _get_client()
     
     result = client.archive_page(page_id, archived=True)
-    return f"Row archived successfully!\nPage ID: {result.get('id', 'unknown')}"
+    return f"Row '{row_name}' archived successfully!\nPage ID: {result.get('id', 'unknown')}"
 
 
 @tool(
     description="Unarchive (restore) a previously archived row.",
     page_id="The page/row ID or URL to restore",
+    row_name="The name/title of the row being restored (for human review purposes)",
     safe=False
 )
-def unarchive_database_row(page_id: str) -> str:
+def unarchive_database_row(page_id: str, row_name: str) -> str:
     """Unarchive a row."""
     client = _get_client()
     
     result = client.archive_page(page_id, archived=False)
-    return f"Row restored successfully!\nPage ID: {result.get('id', 'unknown')}"
+    return f"Row '{row_name}' restored successfully!\nPage ID: {result.get('id', 'unknown')}"
 
 
 @tool(
@@ -428,6 +523,7 @@ TOOLS = [
     get_database_row,
     create_database_row,
     update_database_row,
+    update_database_rows,
     archive_database_row,
     unarchive_database_row,
     search_notion,

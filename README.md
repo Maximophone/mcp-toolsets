@@ -238,9 +238,10 @@ Tools for interacting with Notion databases - read schemas, query rows, create/u
 | `query_database_filtered` | ✅ | Query with Notion filter syntax |
 | `get_database_row` | ✅ | Get a specific row by ID |
 | `create_database_row` | ❌ | Create a new row in database |
-| `update_database_row` | ❌ | Update row properties |
-| `archive_database_row` | ❌ | Archive (soft-delete) a row |
-| `unarchive_database_row` | ❌ | Restore an archived row |
+| `update_database_row` | ❌ | Update row properties (requires row_name for review) |
+| `update_database_rows` | ❌ | Update multiple rows at once (bulk edit) |
+| `archive_database_row` | ❌ | Archive (soft-delete) a row (requires row_name for review) |
+| `unarchive_database_row` | ❌ | Restore an archived row (requires row_name for review) |
 | `search_notion` | ✅ | Search databases and pages |
 
 #### Notion Setup

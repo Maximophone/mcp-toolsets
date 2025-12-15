@@ -69,3 +69,10 @@ try:
 except ImportError as e:
     logger.warning(f"Notion toolset not available: {e}")
 
+# LinkedIn toolset (requires cookies or credentials)
+try:
+    from . import linkedin
+    register_toolset("linkedin", linkedin.TOOLS)
+except ImportError as e:
+    logger.warning(f"LinkedIn toolset not available: {e}")
+

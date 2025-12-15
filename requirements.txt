@@ -22,3 +22,7 @@ google-api-python-client>=2.108.0
 # Discord integration
 discord.py>=2.3.0
 
+# LinkedIn integration (unofficial API)
+linkedin-api>=2.0.0
+browser-cookie3>=0.19.0
+

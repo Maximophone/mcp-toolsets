@@ -45,6 +45,12 @@ class Config:
     # Notion
     NOTION_API_KEY: Optional[str] = os.getenv("NOTION_API_KEY")
     
+    # LinkedIn (unofficial API - use cookies or credentials)
+    LINKEDIN_EMAIL: Optional[str] = os.getenv("LINKEDIN_EMAIL")
+    LINKEDIN_PASSWORD: Optional[str] = os.getenv("LINKEDIN_PASSWORD")
+    LINKEDIN_LI_AT: Optional[str] = os.getenv("LINKEDIN_LI_AT")
+    LINKEDIN_JSESSIONID: Optional[str] = os.getenv("LINKEDIN_JSESSIONID")
+    
     @classmethod
     def validate_path(cls, path: str) -> Path:
         """

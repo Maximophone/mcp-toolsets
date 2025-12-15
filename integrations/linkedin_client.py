@@ -97,11 +97,24 @@ class LinkedInClient:
             
         Returns:
             Profile data dictionary
+            
+        Raises:
+            ValueError: If profile not found or API returns error
         """
         if not public_id and not urn_id:
             raise ValueError("Must provide either public_id or urn_id")
         
-        return self._client.get_profile(public_id=public_id, urn_id=urn_id)
+        result = self._client.get_profile(public_id=public_id, urn_id=urn_id)
+        
+        # Check if API returned an error response
+        if isinstance(result, dict):
+            if "message" in result and "status" in result:
+                # API error response
+                raise ValueError(f"LinkedIn API error: {result.get('message', 'Unknown error')}")
+            if not result:
+                raise ValueError("Profile not found or empty response")
+        
+        return result
     
     def get_profile_contact_info(
         self,
@@ -131,11 +144,46 @@ class LinkedInClient:
         Get the authenticated user's own profile.
         
         Returns:
-            Own profile data
+            Own profile data (normalized structure)
         """
         if self._my_profile is None:
-            self._my_profile = self._client.get_user_profile()
+            raw_profile = self._client.get_user_profile()
+            # Normalize the profile structure
+            # get_user_profile() returns a different format than get_profile()
+            self._my_profile = raw_profile
+            
+            # Extract mini profile data if present
+            if "miniProfile" in raw_profile:
+                mini = raw_profile["miniProfile"]
+                # Merge mini profile fields into top level for consistency
+                for key in ["firstName", "lastName", "publicIdentifier", "entityUrn", "occupation"]:
+                    if key in mini and key not in self._my_profile:
+                        self._my_profile[key] = mini[key]
+                # Map occupation to headline
+                if "occupation" in mini and "headline" not in self._my_profile:
+                    self._my_profile["headline"] = mini["occupation"]
+            
         return self._my_profile
+    
+    def get_my_urn(self) -> Optional[str]:
+        """
+        Get the authenticated user's URN ID.
+        
+        Returns:
+            URN ID string or None
+        """
+        profile = self.get_my_profile()
+        
+        # Try different places where URN might be
+        urn = profile.get("entityUrn") or profile.get("urn_id")
+        if not urn and "miniProfile" in profile:
+            urn = profile["miniProfile"].get("entityUrn")
+        
+        # Extract just the ID part if it's a full URN
+        if urn and ":" in urn:
+            urn = urn.split(":")[-1]
+        
+        return urn
     
     # ============ Connection Operations ============
     
@@ -154,9 +202,13 @@ class LinkedInClient:
         Returns:
             List of connection profiles
         """
-        if urn_id:
-            return self._client.get_profile_connections(urn_id=urn_id)
-        return self._client.get_profile_connections()
+        # If no URN provided, get the authenticated user's URN
+        if not urn_id:
+            urn_id = self.get_my_urn()
+            if not urn_id:
+                raise ValueError("Could not determine your profile URN. Please provide urn_id explicitly.")
+        
+        return self._client.get_profile_connections(urn_id=urn_id)
     
     # ============ Search Operations ============
     
@@ -204,7 +256,15 @@ class LinkedInClient:
         Returns:
             List of conversation objects
         """
-        return self._client.get_conversations()
+        result = self._client.get_conversations()
+        
+        # The API returns a dict with 'elements' key containing the conversations
+        if isinstance(result, dict):
+            return result.get("elements", [])
+        elif isinstance(result, list):
+            return result
+        else:
+            return []
     
     def get_conversation(self, conversation_id: str) -> Dict[str, Any]:
         """

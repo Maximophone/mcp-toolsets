@@ -70,11 +70,14 @@ def _format_profile(profile: Dict[str, Any], verbose: bool = False) -> str:
     """Format a profile for display."""
     lines = []
     
-    # Name and headline
-    first_name = profile.get("firstName", "")
-    last_name = profile.get("lastName", "")
+    # Handle nested miniProfile structure
+    mini = profile.get("miniProfile", {})
+    
+    # Name and headline - try multiple sources
+    first_name = profile.get("firstName") or mini.get("firstName", "")
+    last_name = profile.get("lastName") or mini.get("lastName", "")
     name = f"{first_name} {last_name}".strip() or "(No name)"
-    headline = profile.get("headline", "")
+    headline = profile.get("headline") or profile.get("occupation") or mini.get("occupation", "")
     
     lines.append(f"**{name}**")
     if headline:
@@ -143,24 +146,31 @@ def _format_search_result(result: Dict[str, Any]) -> str:
     """Format a search result for display."""
     lines = []
     
-    # Name
-    first_name = result.get("firstName", "")
-    last_name = result.get("lastName", "")
+    # Handle nested miniProfile structure (from connections)
+    mini = result.get("miniProfile", {})
+    
+    # Name - try multiple sources
+    first_name = result.get("firstName") or mini.get("firstName", "")
+    last_name = result.get("lastName") or mini.get("lastName", "")
     name = f"{first_name} {last_name}".strip() or "(No name)"
     
-    # URN
-    urn_id = result.get("urn_id", "")
-    public_id = result.get("public_id", "")
+    # URN - try multiple sources
+    urn_id = result.get("urn_id") or result.get("entityUrn") or mini.get("entityUrn", "")
+    if urn_id and ":" in urn_id:
+        urn_id = urn_id.split(":")[-1]
+    
+    public_id = result.get("public_id") or result.get("publicIdentifier") or mini.get("publicIdentifier", "")
     
     lines.append(f"• **{name}**")
     
-    # Headline/title
-    headline = result.get("headline") or result.get("jobtitle", "")
+    # Headline/title - try multiple sources
+    headline = (result.get("headline") or result.get("jobtitle") or 
+                result.get("occupation") or mini.get("occupation", ""))
     if headline:
         lines.append(f"  {headline}")
     
     # Location
-    location = result.get("location", "")
+    location = result.get("location") or result.get("locationName", "")
     if location:
         lines.append(f"  📍 {location}")
     
